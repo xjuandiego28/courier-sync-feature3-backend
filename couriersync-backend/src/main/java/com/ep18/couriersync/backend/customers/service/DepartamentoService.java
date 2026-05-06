@@ -36,7 +36,8 @@ public class DepartamentoService {
 
         Departamento departamento = new Departamento();
         departamento.setNombreDepartamento(in.nombreDepartamento());
-        return toView(departamentoRepo.save(departamento));
+        Departamento saved = departamentoRepo.save(departamento);
+        return new DepartamentoView(saved.getIdDepartamento(), saved.getNombreDepartamento());
     }
 
     @Transactional

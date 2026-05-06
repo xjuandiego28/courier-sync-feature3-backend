@@ -17,13 +17,16 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    // CSRF remains enabled elsewhere; GraphQL uses stateless bearer-token authentication.
+    private static final String GRAPHQL_ENDPOINT = "/graphql";
+
     @Bean
     @Profile("!dev-open")
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                                             JwtAuthenticationConverter jwtAuthConverter) throws Exception {
         http
                 .cors(Customizer.withDefaults())
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.ignoringRequestMatchers(GRAPHQL_ENDPOINT))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // preflights
@@ -53,7 +56,7 @@ public class SecurityConfig {
     SecurityFilterChain devOpenChain(HttpSecurity http) throws Exception {
         http
                 .cors(Customizer.withDefaults())
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.ignoringRequestMatchers(GRAPHQL_ENDPOINT))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
