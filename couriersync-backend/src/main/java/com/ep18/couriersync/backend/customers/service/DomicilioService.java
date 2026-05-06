@@ -44,6 +44,7 @@ import static com.ep18.couriersync.backend.common.service.ServiceOperations.valu
 @RequiredArgsConstructor
 public class DomicilioService {
 
+    private static final String FECHA_PEDIDO = "fechaPedido";
     private static final String ESTADO_CREADO = "CREADO";
     private static final Set<String> ESTADOS_CERRADOS = Set.of("ENTREGADO", "CANCELADO");
 
@@ -81,21 +82,21 @@ public class DomicilioService {
     @Transactional(readOnly = true)
     public PageResponse<DomicilioView> listByUsuario(Integer idUsuario, Integer page, Integer size) {
         Page<Domicilio> p = domicilioRepo.findAllByUsuario_IdUsuario(
-                idUsuario, PageRequestUtil.of(page, size, Sort.by("fechaPedido").descending()));
+                idUsuario, PageRequestUtil.of(page, size, Sort.by(FECHA_PEDIDO).descending()));
         return PageMapper.map(p, this::toViewLight);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<DomicilioView> listByEstado(String estado, Integer page, Integer size) {
         Page<Domicilio> p = domicilioRepo.findAllByEstadoIgnoreCase(
-                estado, PageRequestUtil.of(page, size, Sort.by("fechaPedido").descending()));
+                estado, PageRequestUtil.of(page, size, Sort.by(FECHA_PEDIDO).descending()));
         return PageMapper.map(p, this::toViewLight);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<DomicilioView> listByFecha(LocalDate start, LocalDate end, Integer page, Integer size) {
         Page<Domicilio> p = domicilioRepo.findAllByFechaPedidoBetween(
-                start, end, PageRequestUtil.of(page, size, Sort.by("fechaPedido").descending()));
+                start, end, PageRequestUtil.of(page, size, Sort.by(FECHA_PEDIDO).descending()));
         return PageMapper.map(p, this::toViewLight);
     }
 
