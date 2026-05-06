@@ -36,8 +36,9 @@ public class KeycloakRealmRoleConverter implements Converter<Jwt, Collection<Gra
         addRolesFromResources(rawRoles, jwt.getClaim(RESOURCE_ACCESS));
 
         return rawRoles.stream()
-                .map(this::normalizeRole)
+                .map(String::trim)
                 .filter(role -> !role.isEmpty())
+                .map(this::normalizeRole)
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toUnmodifiableSet());
     }
@@ -71,7 +72,7 @@ public class KeycloakRealmRoleConverter implements Converter<Jwt, Collection<Gra
     }
 
     private String normalizeRole(String role) {
-        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        String normalized = role.toUpperCase(Locale.ROOT);
         return normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
     }
 }
