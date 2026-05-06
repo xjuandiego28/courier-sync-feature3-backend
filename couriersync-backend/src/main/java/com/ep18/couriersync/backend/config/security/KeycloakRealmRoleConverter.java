@@ -7,58 +7,71 @@ import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Extrae roles de Keycloak y los mapea a GrantedAuthorities con prefijo ROLE_.
- * - Realm roles:    claim "realm_access.roles"
- * - (Opcional) Client roles: claim "resource_access.{client}.roles"
+ * Extracts Keycloak realm and client roles as Spring Security authorities.
  *
- * Ej.: "admin" -> "ROLE_ADMIN"
+ * Examples:
+ * - realm_access.roles: ["admin"]
+ * - resource_access.{client}.roles: ["operator"]
+ * - "admin" becomes "ROLE_ADMIN"
  */
-@SuppressWarnings("unchecked")
 public class KeycloakRealmRoleConverter implements Converter<Jwt, Collection<GrantedAuthority>> {
+
+    private static final String REALM_ACCESS = "realm_access";
+    private static final String RESOURCE_ACCESS = "resource_access";
+    private static final String ROLES = "roles";
+    private static final String ROLE_PREFIX = "ROLE_";
 
     @Override
     public Collection<GrantedAuthority> convert(Jwt jwt) {
-        // Usamos LinkedHashSet para evitar duplicados y mantener orden de inserción
         Set<String> rawRoles = new LinkedHashSet<>();
 
-        // -------- 1) Realm roles (realm_access.roles) --------
-        Map<String, Object> realmAccess = jwt.getClaim("realm_access");
-        if (realmAccess != null) {
-            Object rolesObj = realmAccess.get("roles");
-            if (rolesObj instanceof Collection<?> roles) {
-                roles.forEach(r -> {
-                    if (r != null) rawRoles.add(r.toString());
-                });
-            }
-        }
+        addRolesFromAccessMap(rawRoles, jwt.getClaim(REALM_ACCESS));
+        addRolesFromResources(rawRoles, jwt.getClaim(RESOURCE_ACCESS));
 
-        // -------- 2) (Opcional) Client roles (resource_access.<client>.roles) --------
-        Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
-        if (resourceAccess instanceof Map<?, ?> resources) {
-            resources.values().forEach(val -> {
-                if (val instanceof Map<?, ?> clientMap) {
-                    Object clientRolesObj = clientMap.get("roles");
-                    if (clientRolesObj instanceof Collection<?> clientRoles) {
-                        clientRoles.forEach(r -> {
-                            if (r != null) rawRoles.add(r.toString());
-                        });
-                    }
-                }
-            });
-        }
-
-        // -------- 3) Normalizar y convertir a authorities --------
         return rawRoles.stream()
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(String::toUpperCase)                         // normaliza
-                .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r) // aplica prefijo ROLE_
+                .map(this::normalizeRole)
+                .filter(role -> !role.isEmpty())
                 .map(SimpleGrantedAuthority::new)
-                .collect(Collectors.toUnmodifiableSet());          // set inmutable sin duplicados
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private void addRolesFromResources(Set<String> rawRoles, Object resourceAccess) {
+        if (!(resourceAccess instanceof Map<?, ?> resources)) {
+            return;
+        }
+
+        resources.values()
+                .forEach(resource -> addRolesFromAccessMap(rawRoles, resource));
+    }
+
+    private void addRolesFromAccessMap(Set<String> rawRoles, Object access) {
+        if (!(access instanceof Map<?, ?> accessMap)) {
+            return;
+        }
+
+        addRoles(rawRoles, accessMap.get(ROLES));
+    }
+
+    private void addRoles(Set<String> rawRoles, Object rolesObject) {
+        if (!(rolesObject instanceof Collection<?> roles)) {
+            return;
+        }
+
+        roles.stream()
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .forEach(rawRoles::add);
+    }
+
+    private String normalizeRole(String role) {
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        return normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
     }
 }
