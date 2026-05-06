@@ -79,8 +79,9 @@ class UsuarioServiceTest {
     void createRejectsDuplicatedEmailAndInvalidLocation() {
         when(usuarioRepo.existsByCorreoIgnoreCase("ana@mail.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
-                "Ana", "ana@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+        CreateUsuarioInput duplicatedEmailInput = new CreateUsuarioInput(
+                "Ana", "ana@mail.com", "3001234567", null, "Calle 1", 2, 1, 3);
+        assertThatThrownBy(() -> service.create(duplicatedEmailInput))
                 .isInstanceOf(ConflictException.class);
 
         Departamento departamento = departamento(1, "Antioquia");
@@ -90,8 +91,9 @@ class UsuarioServiceTest {
         when(departamentoRepo.findById(1)).thenReturn(Optional.of(departamento));
         when(rolRepo.findById(3)).thenReturn(Optional.of(rol(3, "CLIENTE")));
 
-        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
-                "Bea", "bea@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+        CreateUsuarioInput invalidLocationInput = new CreateUsuarioInput(
+                "Bea", "bea@mail.com", "3001234567", null, "Calle 1", 2, 1, 3);
+        assertThatThrownBy(() -> service.create(invalidLocationInput))
                 .isInstanceOf(ValidationException.class);
     }
 
@@ -100,16 +102,18 @@ class UsuarioServiceTest {
         when(usuarioRepo.existsByCorreoIgnoreCase("ana@mail.com")).thenReturn(false);
         when(ciudadRepo.findById(2)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
-                "Ana", "ana@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+        CreateUsuarioInput missingCityInput = new CreateUsuarioInput(
+                "Ana", "ana@mail.com", "3001234567", null, "Calle 1", 2, 1, 3);
+        assertThatThrownBy(() -> service.create(missingCityInput))
                 .isInstanceOf(NotFoundException.class);
 
         when(usuarioRepo.existsByCorreoIgnoreCase("bea@mail.com")).thenReturn(false);
         when(ciudadRepo.findById(2)).thenReturn(Optional.of(ciudad(2, "Medellin", departamento(1, "Antioquia"))));
         when(departamentoRepo.findById(1)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
-                "Bea", "bea@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+        CreateUsuarioInput missingDepartmentInput = new CreateUsuarioInput(
+                "Bea", "bea@mail.com", "3001234567", null, "Calle 1", 2, 1, 3);
+        assertThatThrownBy(() -> service.create(missingDepartmentInput))
                 .isInstanceOf(NotFoundException.class);
 
         Departamento departamento = departamento(1, "Antioquia");
@@ -118,8 +122,9 @@ class UsuarioServiceTest {
         when(departamentoRepo.findById(1)).thenReturn(Optional.of(departamento));
         when(rolRepo.findById(3)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
-                "Caro", "caro@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+        CreateUsuarioInput missingRoleInput = new CreateUsuarioInput(
+                "Caro", "caro@mail.com", "3001234567", null, "Calle 1", 2, 1, 3);
+        assertThatThrownBy(() -> service.create(missingRoleInput))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -156,7 +161,9 @@ class UsuarioServiceTest {
         assertThat(view.correo()).isEqualTo("ANA@mail.com");
 
         when(usuarioRepo.findById(404)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.update(new UpdateUsuarioInput(404, null, null, null, null, null, null, null, null)))
+        UpdateUsuarioInput missingUserInput = new UpdateUsuarioInput(
+                404, null, null, null, null, null, null, null, null);
+        assertThatThrownBy(() -> service.update(missingUserInput))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -167,14 +174,16 @@ class UsuarioServiceTest {
         when(usuarioRepo.findById(9)).thenReturn(Optional.of(usuario));
         when(usuarioRepo.existsByCorreoIgnoreCase("otra@mail.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.update(new UpdateUsuarioInput(
-                9, null, "otra@mail.com", null, null, null, null, null, null)))
+        UpdateUsuarioInput duplicatedEmailInput = new UpdateUsuarioInput(
+                9, null, "otra@mail.com", null, null, null, null, null, null);
+        assertThatThrownBy(() -> service.update(duplicatedEmailInput))
                 .isInstanceOf(ConflictException.class);
 
         when(rolRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(new UpdateUsuarioInput(
-                9, null, null, null, null, null, null, null, 404)))
+        UpdateUsuarioInput missingRoleInput = new UpdateUsuarioInput(
+                9, null, null, null, null, null, null, null, 404);
+        assertThatThrownBy(() -> service.update(missingRoleInput))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -195,7 +204,9 @@ class UsuarioServiceTest {
 
         when(departamentoRepo.findById(4)).thenReturn(Optional.of(valle));
 
-        assertThatThrownBy(() -> service.update(new UpdateUsuarioInput(9, null, null, null, null, null, null, 4, null)))
+        UpdateUsuarioInput invalidDepartmentInput = new UpdateUsuarioInput(
+                9, null, null, null, null, null, null, 4, null);
+        assertThatThrownBy(() -> service.update(invalidDepartmentInput))
                 .isInstanceOf(ValidationException.class);
     }
 

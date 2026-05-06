@@ -130,14 +130,15 @@ class DomicilioServiceTest {
     void updateRejectsClosedOrdersAndUnknownDetails() {
         when(domicilioRepo.findById(8)).thenReturn(Optional.of(domicilio(8, "entregado")));
 
-        assertThatThrownBy(() -> service.update(new UpdateDomicilioInput(
-                8, null, "x", null, null, null, null, null, null, null, null, null)))
+        UpdateDomicilioInput closedOrderInput = new UpdateDomicilioInput(
+                8, null, "x", null, null, null, null, null, null, null, null, null);
+        assertThatThrownBy(() -> service.update(closedOrderInput))
                 .isInstanceOf(ConflictException.class);
         verify(domicilioRepo, never()).save(any());
 
         when(domicilioRepo.findById(9)).thenReturn(Optional.of(domicilio(9, "CREADO")));
 
-        assertThatThrownBy(() -> service.update(new UpdateDomicilioInput(
+        UpdateDomicilioInput unknownDetailInput = new UpdateDomicilioInput(
                 9,
                 null,
                 null,
@@ -150,7 +151,8 @@ class DomicilioServiceTest {
                 null,
                 List.of(new DetalleLineaUpdateInput(404, null, 1, null)),
                 null
-        ))).isInstanceOf(NotFoundException.class);
+        );
+        assertThatThrownBy(() -> service.update(unknownDetailInput)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -178,14 +180,15 @@ class DomicilioServiceTest {
     void createRejectsMissingUserOrProduct() {
         when(usuarioRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(new CreateDomicilioInput(
-                404, "100", null, LocalDate.of(2026, 5, 2), null, null, null, null, List.of())))
+        CreateDomicilioInput missingUserInput = new CreateDomicilioInput(
+                404, "100", null, LocalDate.of(2026, 5, 2), null, null, null, null, List.of());
+        assertThatThrownBy(() -> service.create(missingUserInput))
                 .isInstanceOf(NotFoundException.class);
 
         when(usuarioRepo.findById(1)).thenReturn(Optional.of(usuario(1, "Ana")));
         when(productoRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(new CreateDomicilioInput(
+        CreateDomicilioInput missingProductInput = new CreateDomicilioInput(
                 1,
                 "100",
                 null,
@@ -194,7 +197,8 @@ class DomicilioServiceTest {
                 null,
                 null,
                 null,
-                List.of(new DetalleLineaInput(404, 1, 3_000.0)))))
+                List.of(new DetalleLineaInput(404, 1, 3_000.0)));
+        assertThatThrownBy(() -> service.create(missingProductInput))
                 .isInstanceOf(NotFoundException.class);
     }
 

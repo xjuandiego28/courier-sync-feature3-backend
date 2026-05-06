@@ -42,6 +42,7 @@ import static com.ep18.couriersync.backend.common.service.ServiceOperations.valu
 public class DomicilioService {
 
     private static final String FECHA_PEDIDO = "fechaPedido";
+    private static final String STRING_DOMICILIO_NO_ENCONTRADO = "Domicilio no encontrado";
     private static final String ESTADO_CREADO = "CREADO";
     private static final Set<String> ESTADOS_CERRADOS = Set.of("ENTREGADO", "CANCELADO");
 
@@ -61,7 +62,7 @@ public class DomicilioService {
 
     @Transactional
     public DomicilioView update(UpdateDomicilioInput in) {
-        Domicilio dom = findOrThrow(domicilioRepo, in.idDomicilio(), () -> new NotFoundException("Domicilio no encontrado"));
+        Domicilio dom = findOrThrow(domicilioRepo, in.idDomicilio(), () -> new NotFoundException(STRING_DOMICILIO_NO_ENCONTRADO));
         rejectWhen(
                 isEstadoCerrado(dom.getEstado()),
                 () -> new ConflictException("El domicilio no es editable en estado: " + dom.getEstado()));
@@ -75,7 +76,7 @@ public class DomicilioService {
 
     @Transactional(readOnly = true)
     public DomicilioView findById(Integer id) {
-        return toView(findOrThrow(domicilioRepo, id, () -> new NotFoundException("Domicilio no encontrado")));
+        return toView(findOrThrow(domicilioRepo, id, () -> new NotFoundException(STRING_DOMICILIO_NO_ENCONTRADO)));
     }
 
     @Transactional(readOnly = true)
@@ -101,7 +102,7 @@ public class DomicilioService {
 
     @Transactional
     public boolean delete(Integer id) {
-        Domicilio dom = findOrThrow(domicilioRepo, id, () -> new NotFoundException("Domicilio no encontrado"));
+        Domicilio dom = findOrThrow(domicilioRepo, id, () -> new NotFoundException(STRING_DOMICILIO_NO_ENCONTRADO));
         rejectWhen(
                 isEstadoCerrado(dom.getEstado()),
                 () -> new ConflictException("No se puede eliminar un domicilio en estado: " + dom.getEstado()));
@@ -181,7 +182,7 @@ public class DomicilioService {
         return toView(findOrThrow(
                 domicilioRepo,
                 saved.getIdDomicilio(),
-                () -> new NotFoundException("Domicilio no encontrado")));
+                () -> new NotFoundException(STRING_DOMICILIO_NO_ENCONTRADO)));
     }
 
     private void recalcTotales(Domicilio dom) {

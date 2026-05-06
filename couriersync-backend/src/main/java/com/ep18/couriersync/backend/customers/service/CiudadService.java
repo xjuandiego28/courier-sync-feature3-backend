@@ -30,6 +30,7 @@ import static com.ep18.couriersync.backend.common.service.ServiceOperations.valu
 public class CiudadService {
 
     private static final String SORT_BY_NOMBRE = "nombreCiudad";
+    private static final String STRING_CIUDAD_NO_ENCONTRADA = "Ciudad no encontrada";
 
     private final CiudadRepository ciudadRepo;
     private final DepartamentoRepository departamentoRepo;
@@ -60,7 +61,7 @@ public class CiudadService {
 
     @Transactional
     public CiudadView update(UpdateCiudadInput in) {
-        Ciudad ciudad = findOrThrow(ciudadRepo, in.idCiudad(), () -> new NotFoundException("Ciudad no encontrada"));
+        Ciudad ciudad = findOrThrow(ciudadRepo, in.idCiudad(), () -> new NotFoundException(STRING_CIUDAD_NO_ENCONTRADA));
 
         Optional.ofNullable(in.nombreCiudad())
                 .filter(nombre -> !nombre.equalsIgnoreCase(ciudad.getNombreCiudad()))
@@ -96,7 +97,7 @@ public class CiudadService {
 
     @Transactional(readOnly = true)
     public CiudadView findById(Integer id) {
-        Ciudad ciudad = findOrThrow(ciudadRepo, id, () -> new NotFoundException("Ciudad no encontrada"));
+        Ciudad ciudad = findOrThrow(ciudadRepo, id, () -> new NotFoundException(STRING_CIUDAD_NO_ENCONTRADA));
         return new CiudadView(
                 ciudad.getIdCiudad(),
                 ciudad.getNombreCiudad(),

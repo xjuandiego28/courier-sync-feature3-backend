@@ -51,7 +51,8 @@ class DepartamentoServiceTest {
     void createRejectsDuplicatedName() {
         when(departamentoRepo.existsByNombreDepartamentoIgnoreCase("Antioquia")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateDepartamentoInput("Antioquia")))
+        CreateDepartamentoInput input = new CreateDepartamentoInput("Antioquia");
+        assertThatThrownBy(() -> service.create(input))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("Ya existe");
     }
@@ -73,14 +74,16 @@ class DepartamentoServiceTest {
     void updateRejectsMissingAndDuplicatedDepartments() {
         when(departamentoRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(new UpdateDepartamentoInput(404, "Caldas")))
+        UpdateDepartamentoInput missingDepartmentInput = new UpdateDepartamentoInput(404, "Caldas");
+        assertThatThrownBy(() -> service.update(missingDepartmentInput))
                 .isInstanceOf(NotFoundException.class);
 
         Departamento existing = departamento(5, "Antioquia");
         when(departamentoRepo.findById(5)).thenReturn(Optional.of(existing));
         when(departamentoRepo.existsByNombreDepartamentoIgnoreCase("Caldas")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.update(new UpdateDepartamentoInput(5, "Caldas")))
+        UpdateDepartamentoInput duplicatedNameInput = new UpdateDepartamentoInput(5, "Caldas");
+        assertThatThrownBy(() -> service.update(duplicatedNameInput))
                 .isInstanceOf(ConflictException.class);
     }
 

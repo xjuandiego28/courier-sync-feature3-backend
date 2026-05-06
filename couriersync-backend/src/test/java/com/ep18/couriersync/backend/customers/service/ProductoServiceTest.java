@@ -56,7 +56,8 @@ class ProductoServiceTest {
     void createRejectsDuplicatedName() {
         when(productoRepo.existsByNombreProductoIgnoreCase("Cafe")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateProductoInput("Cafe", 12_000.0, 0.19, "Local")))
+        CreateProductoInput input = new CreateProductoInput("Cafe", 12_000.0, 0.19, "Local");
+        assertThatThrownBy(() -> service.create(input))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("Ya existe");
     }
@@ -80,14 +81,16 @@ class ProductoServiceTest {
     void updateRejectsMissingAndDuplicatedProducts() {
         when(productoRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(new UpdateProductoInput(404, "Te", null, null, null)))
+        UpdateProductoInput missingProductInput = new UpdateProductoInput(404, "Te", null, null, null);
+        assertThatThrownBy(() -> service.update(missingProductInput))
                 .isInstanceOf(NotFoundException.class);
 
         Producto existing = producto(4, "Cafe", 10_000.0, 0.19, "A");
         when(productoRepo.findById(4)).thenReturn(Optional.of(existing));
         when(productoRepo.existsByNombreProductoIgnoreCase("Te")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.update(new UpdateProductoInput(4, "Te", null, null, null)))
+        UpdateProductoInput duplicatedNameInput = new UpdateProductoInput(4, "Te", null, null, null);
+        assertThatThrownBy(() -> service.update(duplicatedNameInput))
                 .isInstanceOf(ConflictException.class);
     }
 

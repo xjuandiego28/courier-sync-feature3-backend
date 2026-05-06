@@ -62,14 +62,16 @@ class CiudadServiceTest {
     void createFailsWhenDepartmentIsMissingOrNameExists() {
         when(departamentoRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(new CreateCiudadInput("Medellin", 404)))
+        CreateCiudadInput missingDepartmentInput = new CreateCiudadInput("Medellin", 404);
+        assertThatThrownBy(() -> service.create(missingDepartmentInput))
                 .isInstanceOf(NotFoundException.class);
 
         when(departamentoRepo.findById(5)).thenReturn(Optional.of(departamento(5, "Antioquia")));
         when(ciudadRepo.existsByNombreCiudadIgnoreCaseAndDepartamento_IdDepartamento("Medellin", 5))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateCiudadInput("Medellin", 5)))
+        CreateCiudadInput duplicatedNameInput = new CreateCiudadInput("Medellin", 5);
+        assertThatThrownBy(() -> service.create(duplicatedNameInput))
                 .isInstanceOf(ConflictException.class);
     }
 
@@ -100,7 +102,8 @@ class CiudadServiceTest {
         when(ciudadRepo.existsByNombreCiudadIgnoreCaseAndDepartamento_IdDepartamento("Bello", 6))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> service.update(new UpdateCiudadInput(3, null, 6)))
+        UpdateCiudadInput input = new UpdateCiudadInput(3, null, 6);
+        assertThatThrownBy(() -> service.update(input))
                 .isInstanceOf(ConflictException.class);
     }
 
@@ -121,14 +124,16 @@ class CiudadServiceTest {
     void updateRejectsMissingCityOrDepartment() {
         when(ciudadRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(new UpdateCiudadInput(404, "Bello", null)))
+        UpdateCiudadInput missingCityInput = new UpdateCiudadInput(404, "Bello", null);
+        assertThatThrownBy(() -> service.update(missingCityInput))
                 .isInstanceOf(NotFoundException.class);
 
         Ciudad ciudad = ciudad(3, "Bello", departamento(5, "Antioquia"));
         when(ciudadRepo.findById(3)).thenReturn(Optional.of(ciudad));
         when(departamentoRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(new UpdateCiudadInput(3, null, 404)))
+        UpdateCiudadInput missingDepartmentInput = new UpdateCiudadInput(3, null, 404);
+        assertThatThrownBy(() -> service.update(missingDepartmentInput))
                 .isInstanceOf(NotFoundException.class);
     }
 

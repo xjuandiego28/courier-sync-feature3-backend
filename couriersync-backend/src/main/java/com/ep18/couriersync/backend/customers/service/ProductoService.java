@@ -28,6 +28,7 @@ import static com.ep18.couriersync.backend.common.service.ServiceOperations.valu
 public class ProductoService {
 
     private final ProductoRepository productoRepo;
+    private static final String STRING_PRODUCTO_NO_ENCONTRADO = "Producto no encontrado";
 
     @Transactional
     public ProductoView create(CreateProductoInput in) {
@@ -53,7 +54,7 @@ public class ProductoService {
 
     @Transactional
     public ProductoView update(UpdateProductoInput in) {
-        Producto producto = findOrThrow(productoRepo, in.idProducto(), () -> new NotFoundException("Producto no encontrado"));
+        Producto producto = findOrThrow(productoRepo, in.idProducto(), () -> new NotFoundException(STRING_PRODUCTO_NO_ENCONTRADO));
 
         rejectDuplicatedChange(
                 in.nombreProducto(),
@@ -79,7 +80,7 @@ public class ProductoService {
 
     @Transactional(readOnly = true)
     public ProductoView findById(Integer id) {
-        Producto producto = findOrThrow(productoRepo, id, () -> new NotFoundException("Producto no encontrado"));
+        Producto producto = findOrThrow(productoRepo, id, () -> new NotFoundException(STRING_PRODUCTO_NO_ENCONTRADO));
         return new ProductoView(
                 producto.getIdProducto(),
                 producto.getNombreProducto(),

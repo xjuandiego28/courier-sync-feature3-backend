@@ -27,6 +27,7 @@ import static com.ep18.couriersync.backend.common.service.ServiceOperations.setI
 public class DepartamentoService {
 
     private final DepartamentoRepository departamentoRepo;
+    private static final String STRING_DEPARTAMENTO_NO_ENCONTRADO = "Departamento no encontrado";
 
     @Transactional
     public DepartamentoView create(CreateDepartamentoInput in) {
@@ -45,7 +46,7 @@ public class DepartamentoService {
         Departamento departamento = findOrThrow(
                 departamentoRepo,
                 in.idDepartamento(),
-                () -> new NotFoundException("Departamento no encontrado"));
+                () -> new NotFoundException(STRING_DEPARTAMENTO_NO_ENCONTRADO));
 
         rejectDuplicatedChange(
                 in.nombreDepartamento(),
@@ -64,7 +65,7 @@ public class DepartamentoService {
         Departamento departamento = findOrThrow(
                 departamentoRepo,
                 id,
-                () -> new NotFoundException("Departamento no encontrado"));
+                () -> new NotFoundException(STRING_DEPARTAMENTO_NO_ENCONTRADO));
         return new DepartamentoView(departamento.getIdDepartamento(), departamento.getNombreDepartamento());
     }
 

@@ -27,6 +27,7 @@ import static com.ep18.couriersync.backend.common.service.ServiceOperations.setI
 public class RolService {
 
     private final RolRepository rolRepo;
+    private static final String STRING_ROL_NO_ENCONTRADO = "Rol no encontrado";
 
     @Transactional
     public RolView create(CreateRolInput in) {
@@ -42,7 +43,7 @@ public class RolService {
 
     @Transactional
     public RolView update(UpdateRolInput in) {
-        Rol rol = findOrThrow(rolRepo, in.idRol(), () -> new NotFoundException("Rol no encontrado"));
+        Rol rol = findOrThrow(rolRepo, in.idRol(), () -> new NotFoundException(STRING_ROL_NO_ENCONTRADO));
 
         rejectDuplicatedChange(
                 in.nombreRol(),
@@ -58,7 +59,7 @@ public class RolService {
 
     @Transactional(readOnly = true)
     public RolView findById(Integer id) {
-        Rol rol = findOrThrow(rolRepo, id, () -> new NotFoundException("Rol no encontrado"));
+        Rol rol = findOrThrow(rolRepo, id, () -> new NotFoundException(STRING_ROL_NO_ENCONTRADO));
         return new RolView(rol.getIdRol(), rol.getNombreRol());
     }
 

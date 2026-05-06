@@ -51,7 +51,8 @@ class RolServiceTest {
     void createRejectsDuplicatedName() {
         when(rolRepo.existsByNombreRolIgnoreCase("CLIENTE")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateRolInput("CLIENTE")))
+        CreateRolInput input = new CreateRolInput("CLIENTE");
+        assertThatThrownBy(() -> service.create(input))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("Ya existe");
     }
@@ -73,14 +74,16 @@ class RolServiceTest {
     void updateRejectsMissingAndDuplicatedRoles() {
         when(rolRepo.findById(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(new UpdateRolInput(404, "ADMIN")))
+        UpdateRolInput missingRoleInput = new UpdateRolInput(404, "ADMIN");
+        assertThatThrownBy(() -> service.update(missingRoleInput))
                 .isInstanceOf(NotFoundException.class);
 
         Rol existing = rol(3, "CLIENTE");
         when(rolRepo.findById(3)).thenReturn(Optional.of(existing));
         when(rolRepo.existsByNombreRolIgnoreCase("ADMIN")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.update(new UpdateRolInput(3, "ADMIN")))
+        UpdateRolInput duplicatedNameInput = new UpdateRolInput(3, "ADMIN");
+        assertThatThrownBy(() -> service.update(duplicatedNameInput))
                 .isInstanceOf(ConflictException.class);
     }
 
