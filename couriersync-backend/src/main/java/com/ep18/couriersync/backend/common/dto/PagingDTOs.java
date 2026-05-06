@@ -5,7 +5,11 @@ import java.util.List;
 public final class PagingDTOs {
     private PagingDTOs() {}
 
-    public record PageInfo(int page, int size, long totalElements, int totalPages) {}
+    public record PageInfo(int page,
+                           int size,
+                           long totalElements,
+                           int totalPages) {}
 
-    public record PageResponse<T>(List<T> content, PageInfo pageInfo) {}
+    public record PageResponse<T>(List<T> content,
+                                  PageInfo pageInfo) {}
 }

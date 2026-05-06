@@ -27,7 +27,7 @@ public class CiudadService {
 
     @Transactional
     public CiudadView create(CreateCiudadInput in) {
-        var depto = departamentoRepo.findById(in.idDepartamento())
+        var departamento = departamentoRepo.findById(in.idDepartamento())
                 .orElseThrow(() -> new NotFoundException("Departamento no encontrado"));
 
         if (ciudadRepo.existsByNombreCiudadIgnoreCaseAndDepartamento_IdDepartamento(
@@ -37,7 +37,7 @@ public class CiudadService {
 
         var c = new Ciudad();
         c.setNombreCiudad(in.nombreCiudad());
-        c.setDepartamento(depto);
+        c.setDepartamento(departamento);
 
         return toView(ciudadRepo.save(c));
     }
