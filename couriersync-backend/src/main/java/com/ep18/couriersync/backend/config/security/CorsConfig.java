@@ -9,7 +9,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
@@ -25,18 +24,22 @@ public class CorsConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         CorsOrigins origins = CorsOrigins.from(allowedOriginsCsv);
 
-        applyOrigins(registry.addMapping("/graphql")
-                .allowedMethods("GET", "POST", "OPTIONS")
-                .allowedHeaders(CorsConfiguration.ALL)
-                .exposedHeaders("Content-Type")
-                .maxAge(3600), origins)
-                .allowCredentials(true);
+        applyOrigins(
+                registry.addMapping("/graphql")
+                        .allowedMethods("GET", "POST", "OPTIONS")
+                        .allowedHeaders(CorsConfiguration.ALL)
+                        .exposedHeaders("Content-Type")
+                        .maxAge(3600),
+                origins
+        ).allowCredentials(true);
 
-        applyOrigins(registry.addMapping("/graphiql/**")
-                .allowedMethods("GET", "OPTIONS")
-                .allowedHeaders(CorsConfiguration.ALL)
-                .maxAge(3600), origins)
-                .allowCredentials(true);
+        applyOrigins(
+                registry.addMapping("/graphiql/**")
+                        .allowedMethods("GET", "OPTIONS")
+                        .allowedHeaders(CorsConfiguration.ALL)
+                        .maxAge(3600),
+                origins
+        ).allowCredentials(true);
     }
 
     private CorsRegistration applyOrigins(CorsRegistration registration, CorsOrigins origins) {
@@ -45,22 +48,29 @@ public class CorsConfig implements WebMvcConfigurer {
         return registration;
     }
 
-    private void applyOriginValues(String[] values, OriginConfigurer configurer) {
-        Optional.of(values)
-                .filter(origins -> origins.length > 0)
-                .ifPresent(configurer::apply);
+    private void applyOriginValues(List<String> values, OriginConfigurer configurer) {
+        if (!values.isEmpty()) {
+            configurer.apply(values.toArray(String[]::new));
+        }
     }
 
-    private record CorsOrigins(String[] exact, String[] patterns) {
+    private record CorsOrigins(List<String> exact, List<String> patterns) {
 
         private static CorsOrigins from(String csv) {
             List<String> origins = Arrays.stream(csv.split(","))
                     .map(String::trim)
                     .filter(Predicate.not(String::isEmpty))
                     .toList();
+
             return new CorsOrigins(
-                    origins.stream().filter(Predicate.not(CorsOrigins::isPattern)).toArray(String[]::new),
-                    origins.stream().filter(CorsOrigins::isPattern).toArray(String[]::new));
+                    origins.stream()
+                            .filter(Predicate.not(CorsOrigins::isPattern))
+                            .toList(),
+
+                    origins.stream()
+                            .filter(CorsOrigins::isPattern)
+                            .toList()
+            );
         }
 
         private static boolean isPattern(String origin) {
