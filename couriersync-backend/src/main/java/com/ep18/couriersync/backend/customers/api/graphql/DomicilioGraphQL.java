@@ -1,11 +1,8 @@
 package com.ep18.couriersync.backend.customers.api.graphql;
 
-import com.ep18.couriersync.backend.common.dto.PagingDTOs.PageInfo;
 import com.ep18.couriersync.backend.common.dto.PagingDTOs.PageResponse;
 import com.ep18.couriersync.backend.customers.dto.DomicilioDTOs.CreateDomicilioInput;
 import com.ep18.couriersync.backend.customers.dto.DomicilioDTOs.DomicilioView;
-import com.ep18.couriersync.backend.customers.dto.DomicilioDTOs.DetalleLineaInput;
-import com.ep18.couriersync.backend.customers.dto.DomicilioDTOs.DetalleLineaUpdateInput;
 import com.ep18.couriersync.backend.customers.dto.DomicilioDTOs.UpdateDomicilioInput;
 import com.ep18.couriersync.backend.customers.service.DomicilioService;
 import lombok.RequiredArgsConstructor;

@@ -11,11 +11,16 @@ import com.ep18.couriersync.backend.customers.dto.DepartamentoDTOs.DepartamentoV
 import com.ep18.couriersync.backend.customers.dto.DepartamentoDTOs.UpdateDepartamentoInput;
 import com.ep18.couriersync.backend.customers.repository.DepartamentoRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.deleteIfPresent;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.findOrThrow;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectDuplicatedChange;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectWhen;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.setIfPresent;
 
 @Service
 @RequiredArgsConstructor
@@ -25,56 +30,55 @@ public class DepartamentoService {
 
     @Transactional
     public DepartamentoView create(CreateDepartamentoInput in) {
-        if (departamentoRepo.existsByNombreDepartamentoIgnoreCase(in.nombreDepartamento())) {
-            throw new ConflictException("Ya existe un departamento con ese nombre");
-        }
-        var d = new Departamento();
-        d.setNombreDepartamento(in.nombreDepartamento());
-        return toView(departamentoRepo.save(d));
+        rejectWhen(
+                departamentoRepo.existsByNombreDepartamentoIgnoreCase(in.nombreDepartamento()),
+                () -> new ConflictException("Ya existe un departamento con ese nombre"));
+
+        Departamento departamento = new Departamento();
+        departamento.setNombreDepartamento(in.nombreDepartamento());
+        return toView(departamentoRepo.save(departamento));
     }
 
     @Transactional
     public DepartamentoView update(UpdateDepartamentoInput in) {
-        var d = departamentoRepo.findById(in.idDepartamento())
-                .orElseThrow(() -> new NotFoundException("Departamento no encontrado"));
+        Departamento departamento = findDepartamentoOrThrow(in.idDepartamento());
 
-        if (in.nombreDepartamento()!=null &&
-                !in.nombreDepartamento().equalsIgnoreCase(d.getNombreDepartamento()) &&
-                departamentoRepo.existsByNombreDepartamentoIgnoreCase(in.nombreDepartamento())) {
-            throw new ConflictException("Ya existe un departamento con ese nombre");
-        }
-        if (in.nombreDepartamento()!=null) {
-            d.setNombreDepartamento(in.nombreDepartamento());
-        }
-        return toView(departamentoRepo.save(d));
+        rejectDuplicatedChange(
+                in.nombreDepartamento(),
+                departamento.getNombreDepartamento(),
+                String::equalsIgnoreCase,
+                departamentoRepo::existsByNombreDepartamentoIgnoreCase,
+                () -> new ConflictException("Ya existe un departamento con ese nombre"));
+        setIfPresent(in.nombreDepartamento(), departamento::setNombreDepartamento);
+
+        return toView(departamentoRepo.save(departamento));
     }
 
     @Transactional(readOnly = true)
     public DepartamentoView findById(Integer id) {
-        return departamentoRepo.findById(id)
-                .map(this::toView)
-                .orElseThrow(() -> new NotFoundException("Departamento no encontrado"));
+        return toView(findDepartamentoOrThrow(id));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<DepartamentoView> list(Integer page, Integer size) {
-        Page<Departamento> p = departamentoRepo.findAll(
+        Page<Departamento> departamentos = departamentoRepo.findAll(
                 PageRequestUtil.of(page, size, Sort.by("nombreDepartamento").ascending()));
-        return PageMapper.map(p, this::toView);
+        return PageMapper.map(departamentos, this::toView);
     }
 
     @Transactional
     public boolean delete(Integer id) {
-        if (!departamentoRepo.existsById(id)) return false;
-        try {
-            departamentoRepo.deleteById(id);
-            return true;
-        } catch (DataIntegrityViolationException e) {
-            throw new ConflictException("No se puede eliminar: existen registros relacionados");
-        }
+        return deleteIfPresent(
+                departamentoRepo,
+                id,
+                () -> new ConflictException("No se puede eliminar: existen registros relacionados"));
     }
 
-    private DepartamentoView toView(Departamento d) {
-        return new DepartamentoView(d.getIdDepartamento(), d.getNombreDepartamento());
+    private Departamento findDepartamentoOrThrow(Integer id) {
+        return findOrThrow(departamentoRepo, id, () -> new NotFoundException("Departamento no encontrado"));
+    }
+
+    private DepartamentoView toView(Departamento departamento) {
+        return new DepartamentoView(departamento.getIdDepartamento(), departamento.getNombreDepartamento());
     }
 }

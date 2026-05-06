@@ -6,12 +6,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Extracts Keycloak realm and client roles as Spring Security authorities.
@@ -30,12 +30,9 @@ public class KeycloakRealmRoleConverter implements Converter<Jwt, Collection<Gra
 
     @Override
     public Collection<GrantedAuthority> convert(Jwt jwt) {
-        Set<String> rawRoles = new LinkedHashSet<>();
-
-        addRolesFromAccessMap(rawRoles, jwt.getClaim(REALM_ACCESS));
-        addRolesFromResources(rawRoles, jwt.getClaim(RESOURCE_ACCESS));
-
-        return rawRoles.stream()
+        return Stream.concat(
+                        rolesFromAccessMap(jwt.getClaim(REALM_ACCESS)),
+                        rolesFromResources(jwt.getClaim(RESOURCE_ACCESS)))
                 .map(String::trim)
                 .filter(role -> !role.isEmpty())
                 .map(this::normalizeRole)
@@ -43,36 +40,48 @@ public class KeycloakRealmRoleConverter implements Converter<Jwt, Collection<Gra
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    private void addRolesFromResources(Set<String> rawRoles, Object resourceAccess) {
-        if (!(resourceAccess instanceof Map<?, ?> resources)) {
-            return;
-        }
-
-        resources.values()
-                .forEach(resource -> addRolesFromAccessMap(rawRoles, resource));
+    private Stream<String> rolesFromResources(Object resourceAccess) {
+        return mapValues(resourceAccess)
+                .map(Map.Entry::getValue)
+                .flatMap(this::rolesFromAccessMap);
     }
 
-    private void addRolesFromAccessMap(Set<String> rawRoles, Object access) {
-        if (!(access instanceof Map<?, ?> accessMap)) {
-            return;
-        }
-
-        addRoles(rawRoles, accessMap.get(ROLES));
+    private Stream<String> rolesFromAccessMap(Object access) {
+        return mapValues(access)
+                .filter(rolesEntry -> ROLES.equals(rolesEntry.getKey()))
+                .flatMap(rolesEntry -> roleValues(rolesEntry.getValue()));
     }
 
-    private void addRoles(Set<String> rawRoles, Object rolesObject) {
-        if (!(rolesObject instanceof Collection<?> roles)) {
-            return;
-        }
+    private Stream<Map.Entry<?, ?>> mapValues(Object value) {
+        return asMap(value)
+                .stream()
+                .flatMap(map -> map.entrySet().stream());
+    }
 
-        roles.stream()
+    private Stream<String> roleValues(Object rolesObject) {
+        return asCollection(rolesObject)
+                .stream()
+                .flatMap(Collection::stream)
                 .filter(Objects::nonNull)
-                .map(Object::toString)
-                .forEach(rawRoles::add);
+                .map(Object::toString);
+    }
+
+    private Optional<Map<?, ?>> asMap(Object value) {
+        return Optional.ofNullable(value)
+                .filter(Map.class::isInstance)
+                .map(candidate -> (Map<?, ?>) candidate);
+    }
+
+    private Optional<Collection<?>> asCollection(Object value) {
+        return Optional.ofNullable(value)
+                .filter(Collection.class::isInstance)
+                .map(candidate -> (Collection<?>) candidate);
     }
 
     private String normalizeRole(String role) {
         String normalized = role.toUpperCase(Locale.ROOT);
-        return normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
+        return Optional.of(normalized)
+                .filter(value -> value.startsWith(ROLE_PREFIX))
+                .orElse(ROLE_PREFIX + normalized);
     }
 }

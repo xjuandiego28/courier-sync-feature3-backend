@@ -3,59 +3,73 @@ package com.ep18.couriersync.backend.config.security;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.servlet.config.annotation.CorsRegistration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
- * CORS para /graphql (y opcionalmente /graphiql).
- * Soporta orígenes exactos y patrones (p.ej. https://*.vercel.app).
- *
- * Propiedad CSV: app.cors.allowed-origins
- *   - Ej: "http://localhost:3000,http://localhost:5173,https://courier-sync-feature3-frontend.vercel.app,https://*.vercel.app"
+ * CORS para /graphql y /graphiql.
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
-    // Evita '*' por defecto si usas allowCredentials(true)
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,https://courier-sync-feature3-frontend.vercel.app}")
     private String allowedOriginsCsv;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        List<String> all = Arrays.stream(allowedOriginsCsv.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toList());
+        CorsOrigins origins = CorsOrigins.from(allowedOriginsCsv);
 
-        // Separa exactos y patrones (con '*')
-        String[] exact = all.stream().filter(s -> !s.contains("*")).toArray(String[]::new);
-        String[] patterns = all.stream().filter(s -> s.contains("*")).toArray(String[]::new);
-
-        // --- /graphql ---
-        var reg = registry.addMapping("/graphql")
+        applyOrigins(registry.addMapping("/graphql")
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders(CorsConfiguration.ALL)
-                .exposedHeaders("Content-Type") // 'Authorization' en respuesta casi nunca es necesario
-                .maxAge(3600);
+                .exposedHeaders("Content-Type")
+                .maxAge(3600), origins)
+                .allowCredentials(true);
 
-        if (exact.length > 0)    reg.allowedOrigins(exact);
-        if (patterns.length > 0) reg.allowedOriginPatterns(patterns);
-
-        // Si realmente necesitas cookies o auth por cookie (no por Bearer), déjalo true
-        reg.allowCredentials(true);
-
-        // --- /graphiql/** (si usas GraphiQL) ---
-        var regGiql = registry.addMapping("/graphiql/**")
+        applyOrigins(registry.addMapping("/graphiql/**")
                 .allowedMethods("GET", "OPTIONS")
                 .allowedHeaders(CorsConfiguration.ALL)
-                .maxAge(3600);
+                .maxAge(3600), origins)
+                .allowCredentials(true);
+    }
 
-        if (exact.length > 0)    regGiql.allowedOrigins(exact);
-        if (patterns.length > 0) regGiql.allowedOriginPatterns(patterns);
-        regGiql.allowCredentials(true);
+    private CorsRegistration applyOrigins(CorsRegistration registration, CorsOrigins origins) {
+        applyOriginValues(origins.exact(), registration::allowedOrigins);
+        applyOriginValues(origins.patterns(), registration::allowedOriginPatterns);
+        return registration;
+    }
+
+    private void applyOriginValues(String[] values, OriginConfigurer configurer) {
+        Optional.of(values)
+                .filter(origins -> origins.length > 0)
+                .ifPresent(configurer::apply);
+    }
+
+    private record CorsOrigins(String[] exact, String[] patterns) {
+
+        private static CorsOrigins from(String csv) {
+            List<String> origins = Arrays.stream(csv.split(","))
+                    .map(String::trim)
+                    .filter(Predicate.not(String::isEmpty))
+                    .toList();
+            return new CorsOrigins(
+                    origins.stream().filter(Predicate.not(CorsOrigins::isPattern)).toArray(String[]::new),
+                    origins.stream().filter(CorsOrigins::isPattern).toArray(String[]::new));
+        }
+
+        private static boolean isPattern(String origin) {
+            return origin.contains("*");
+        }
+    }
+
+    @FunctionalInterface
+    private interface OriginConfigurer {
+        CorsRegistration apply(String... origins);
     }
 }

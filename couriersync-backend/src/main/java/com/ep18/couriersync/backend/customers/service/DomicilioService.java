@@ -30,9 +30,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.findOrThrow;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.nvl;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectWhen;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.setIfPresent;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.valueOrDefault;
 
 @Service
 @RequiredArgsConstructor
@@ -123,9 +129,9 @@ public class DomicilioService {
     }
 
     private void addDetalles(Domicilio dom, List<DetalleLineaInput> detalles) {
-        for (DetalleLineaInput detalle : emptyIfNull(detalles)) {
-            dom.addDetalle(createDetalle(detalle));
-        }
+        safeStream(detalles)
+                .map(this::createDetalle)
+                .forEach(dom::addDetalle);
     }
 
     private DetalleDomicilio createDetalle(DetalleLineaInput in) {
@@ -138,9 +144,8 @@ public class DomicilioService {
 
     private void updateDetalles(Domicilio dom, List<DetalleLineaUpdateInput> detalles) {
         Map<Integer, DetalleDomicilio> detallesById = indexDetallesById(dom);
-        for (DetalleLineaUpdateInput detalle : emptyIfNull(detalles)) {
-            updateDetalle(detallesById, detalle);
-        }
+        safeStream(detalles)
+                .forEach(detalle -> updateDetalle(detallesById, detalle));
     }
 
     private Map<Integer, DetalleDomicilio> indexDetallesById(Domicilio dom) {
@@ -157,13 +162,13 @@ public class DomicilioService {
     }
 
     private void deleteDetalles(Domicilio dom, List<Integer> deleteDetalleIds) {
-        List<Integer> ids = emptyIfNull(deleteDetalleIds);
-        if (ids.isEmpty()) {
-            return;
-        }
-
-        dom.getDetalles().removeIf(detalle -> ids.contains(detalle.getIdDetalle()));
-        detalleRepo.deleteAllByDomicilio_IdDomicilioAndIdDetalleIn(dom.getIdDomicilio(), ids);
+        List<Integer> ids = safeStream(deleteDetalleIds).toList();
+        java.util.Optional.of(ids)
+                .filter(presentIds -> !presentIds.isEmpty())
+                .ifPresent(presentIds -> {
+                    dom.getDetalles().removeIf(detalle -> presentIds.contains(detalle.getIdDetalle()));
+                    detalleRepo.deleteAllByDomicilio_IdDomicilioAndIdDetalleIn(dom.getIdDomicilio(), presentIds);
+                });
     }
 
     private DomicilioView saveAndReturnView(Domicilio dom) {
@@ -172,73 +177,51 @@ public class DomicilioService {
     }
 
     private Usuario findUsuarioOrThrow(Integer id) {
-        return usuarioRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        return findOrThrow(usuarioRepo, id, () -> new NotFoundException("Usuario no encontrado"));
     }
 
     private Producto findProductoOrThrow(Integer id) {
-        return productoRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Producto no encontrado: " + id));
+        return findOrThrow(productoRepo, id, () -> new NotFoundException("Producto no encontrado: " + id));
     }
 
     private Domicilio findDomicilioOrThrow(Integer id) {
-        return domicilioRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Domicilio no encontrado"));
+        return findOrThrow(domicilioRepo, id, () -> new NotFoundException("Domicilio no encontrado"));
     }
 
     private DetalleDomicilio findDetalleOrThrow(Map<Integer, DetalleDomicilio> detallesById, Integer id) {
-        DetalleDomicilio detalle = detallesById.get(id);
-        if (detalle == null) {
-            throw new NotFoundException("Detalle no encontrado: " + id);
-        }
-        return detalle;
+        return java.util.Optional.ofNullable(detallesById.get(id))
+                .orElseThrow(() -> new NotFoundException("Detalle no encontrado: " + id));
     }
 
     private void assertEditable(Domicilio dom) {
-        if (isEstadoCerrado(dom.getEstado())) {
-            throw new ConflictException("El domicilio no es editable en estado: " + dom.getEstado());
-        }
+        rejectWhen(
+                isEstadoCerrado(dom.getEstado()),
+                () -> new ConflictException("El domicilio no es editable en estado: " + dom.getEstado()));
     }
 
     private void assertDeletable(Domicilio dom) {
-        if (isEstadoCerrado(dom.getEstado())) {
-            throw new ConflictException("No se puede eliminar un domicilio en estado: " + dom.getEstado());
-        }
+        rejectWhen(
+                isEstadoCerrado(dom.getEstado()),
+                () -> new ConflictException("No se puede eliminar un domicilio en estado: " + dom.getEstado()));
     }
 
     private void recalcTotales(Domicilio dom) {
-        double valorPedido = dom.getDetalles() == null ? 0.0 :
-                dom.getDetalles().stream()
-                        .mapToDouble(d -> nvl(d.getPrecioNeto()) * nvl(d.getCantidad()))
-                        .sum();
+        double valorPedido = safeStream(dom.getDetalles())
+                .mapToDouble(d -> nvl(d.getPrecioNeto()) * nvl(d.getCantidad()))
+                .sum();
         dom.setValorPedido(valorPedido);
         dom.setValorTotal(valorPedido + nvl(dom.getValorDomicilio()));
     }
 
     private boolean isEstadoCerrado(String estado) {
-        return estado != null && ESTADOS_CERRADOS.contains(estado.trim().toUpperCase(Locale.ROOT));
+        return java.util.Optional.ofNullable(estado)
+                .map(value -> value.trim().toUpperCase(Locale.ROOT))
+                .filter(ESTADOS_CERRADOS::contains)
+                .isPresent();
     }
 
-    private double nvl(Double d) {
-        return d == null ? 0.0 : d;
-    }
-
-    private int nvl(Integer i) {
-        return i == null ? 0 : i;
-    }
-
-    private <T> T valueOrDefault(T value, T defaultValue) {
-        return value != null ? value : defaultValue;
-    }
-
-    private <T> List<T> emptyIfNull(List<T> values) {
-        return values == null ? List.of() : values;
-    }
-
-    private <T> void setIfPresent(T value, Consumer<T> setter) {
-        if (value != null) {
-            setter.accept(value);
-        }
+    private <T> Stream<T> safeStream(List<T> values) {
+        return valueOrDefault(values, List.<T>of()).stream();
     }
 
     private DomicilioView toView(Domicilio d) {

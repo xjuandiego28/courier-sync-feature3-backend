@@ -18,14 +18,22 @@ import com.ep18.couriersync.backend.customers.repository.RolRepository;
 import com.ep18.couriersync.backend.customers.repository.UsuarioRepository;
 import com.ep18.couriersync.backend.customers.validator.UsuarioValidator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.function.Consumer;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Stream;
+
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.deleteIfPresent;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.findOrThrow;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectDuplicatedChange;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectWhen;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.setIfPresent;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.valueOrDefault;
 
 @Service
 @RequiredArgsConstructor
@@ -96,12 +104,10 @@ public class UsuarioService {
 
     @Transactional
     public boolean delete(Integer id) {
-        if (!usuarioRepo.existsById(id)) {
-            return false;
-        }
-
-        deleteExistingUsuario(id);
-        return true;
+        return deleteIfPresent(
+                usuarioRepo,
+                id,
+                () -> new ConflictException("No se puede eliminar: existen registros relacionados"));
     }
 
     private UsuarioReferences findCreateReferences(CreateUsuarioInput in) {
@@ -133,10 +139,16 @@ public class UsuarioService {
     }
 
     private void applyLocationChanges(Usuario usuario, UpdateUsuarioInput in) {
-        if (!hasLocationChanges(in)) {
-            return;
-        }
+        Optional.of(in)
+                .filter(this::hasLocationChanges)
+                .ifPresent(input -> updateLocation(usuario, input));
+    }
 
+    private boolean hasLocationChanges(UpdateUsuarioInput in) {
+        return Stream.of(in.idCiudad(), in.idDepartamento()).anyMatch(Objects::nonNull);
+    }
+
+    private void updateLocation(Usuario usuario, UpdateUsuarioInput in) {
         Ciudad ciudad = valueOrFind(in.idCiudad(), usuario.getCiudad(), this::findCiudadOrThrow);
         Departamento departamento = valueOrFind(
                 in.idDepartamento(), usuario.getDepartamento(), this::findDepartamentoOrThrow);
@@ -146,68 +158,43 @@ public class UsuarioService {
         usuario.setDepartamento(departamento);
     }
 
-    private boolean hasLocationChanges(UpdateUsuarioInput in) {
-        return in.idCiudad() != null || in.idDepartamento() != null;
-    }
-
     private void applyRolChange(Usuario usuario, Integer idRol) {
         setIfPresent(idRol, id -> usuario.setRol(findRolOrThrow(id)));
     }
 
     private void assertCorreoDisponible(String correo) {
-        if (usuarioRepo.existsByCorreoIgnoreCase(correo)) {
-            throw new ConflictException("El correo ya esta registrado");
-        }
+        rejectWhen(
+                usuarioRepo.existsByCorreoIgnoreCase(correo),
+                () -> new ConflictException("El correo ya esta registrado"));
     }
 
     private void assertCorreoDisponibleForUpdate(String correo, Usuario usuario) {
-        if (correo == null || correo.equalsIgnoreCase(usuario.getCorreo())) {
-            return;
-        }
-
-        assertCorreoDisponible(correo);
+        rejectDuplicatedChange(
+                correo,
+                usuario.getCorreo(),
+                String::equalsIgnoreCase,
+                usuarioRepo::existsByCorreoIgnoreCase,
+                () -> new ConflictException("El correo ya esta registrado"));
     }
 
     private Usuario findUsuarioOrThrow(Integer id) {
-        return usuarioRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        return findOrThrow(usuarioRepo, id, () -> new NotFoundException("Usuario no encontrado"));
     }
 
     private Ciudad findCiudadOrThrow(Integer id) {
-        return ciudadRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Ciudad no encontrada"));
+        return findOrThrow(ciudadRepo, id, () -> new NotFoundException("Ciudad no encontrada"));
     }
 
     private Departamento findDepartamentoOrThrow(Integer id) {
-        return departamentoRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Departamento no encontrado"));
+        return findOrThrow(departamentoRepo, id, () -> new NotFoundException("Departamento no encontrado"));
     }
 
     private Rol findRolOrThrow(Integer id) {
-        return rolRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Rol no encontrado"));
-    }
-
-    private void deleteExistingUsuario(Integer id) {
-        try {
-            usuarioRepo.deleteById(id);
-        } catch (DataIntegrityViolationException e) {
-            throw new ConflictException("No se puede eliminar: existen registros relacionados");
-        }
-    }
-
-    private <T> T valueOrDefault(T value, T defaultValue) {
-        return value != null ? value : defaultValue;
+        return findOrThrow(rolRepo, id, () -> new NotFoundException("Rol no encontrado"));
     }
 
     private <T> T valueOrFind(Integer id, T currentValue, Finder<T> finder) {
-        return id == null ? currentValue : finder.find(id);
-    }
-
-    private <T> void setIfPresent(T value, Consumer<T> setter) {
-        if (value != null) {
-            setter.accept(value);
-        }
+        return Optional.ofNullable(id).map(finder::find).orElse(currentValue);
     }
 
     private UsuarioView toView(Usuario u) {

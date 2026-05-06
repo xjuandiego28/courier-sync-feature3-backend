@@ -11,11 +11,16 @@ import com.ep18.couriersync.backend.customers.dto.RolDTOs.RolView;
 import com.ep18.couriersync.backend.customers.dto.RolDTOs.UpdateRolInput;
 import com.ep18.couriersync.backend.customers.repository.RolRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.deleteIfPresent;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.findOrThrow;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectDuplicatedChange;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectWhen;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.setIfPresent;
 
 @Service
 @RequiredArgsConstructor
@@ -25,54 +30,54 @@ public class RolService {
 
     @Transactional
     public RolView create(CreateRolInput in) {
-        if (rolRepo.existsByNombreRolIgnoreCase(in.nombreRol())) {
-            throw new ConflictException("Ya existe un rol con ese nombre");
-        }
-        var r = new Rol();
-        r.setNombreRol(in.nombreRol());
-        return toView(rolRepo.save(r));
+        rejectWhen(
+                rolRepo.existsByNombreRolIgnoreCase(in.nombreRol()),
+                () -> new ConflictException("Ya existe un rol con ese nombre"));
+
+        Rol rol = new Rol();
+        rol.setNombreRol(in.nombreRol());
+        return toView(rolRepo.save(rol));
     }
 
     @Transactional
     public RolView update(UpdateRolInput in) {
-        var r = rolRepo.findById(in.idRol())
-                .orElseThrow(() -> new NotFoundException("Rol no encontrado"));
+        Rol rol = findRolOrThrow(in.idRol());
 
-        if (in.nombreRol()!=null &&
-                !in.nombreRol().equalsIgnoreCase(r.getNombreRol()) &&
-                rolRepo.existsByNombreRolIgnoreCase(in.nombreRol())) {
-            throw new ConflictException("Ya existe un rol con ese nombre");
-        }
-        if (in.nombreRol()!=null) {
-            r.setNombreRol(in.nombreRol());
-        }
-        return toView(rolRepo.save(r));
+        rejectDuplicatedChange(
+                in.nombreRol(),
+                rol.getNombreRol(),
+                String::equalsIgnoreCase,
+                rolRepo::existsByNombreRolIgnoreCase,
+                () -> new ConflictException("Ya existe un rol con ese nombre"));
+        setIfPresent(in.nombreRol(), rol::setNombreRol);
+
+        return toView(rolRepo.save(rol));
     }
 
     @Transactional(readOnly = true)
     public RolView findById(Integer id) {
-        return rolRepo.findById(id).map(this::toView)
-                .orElseThrow(() -> new NotFoundException("Rol no encontrado"));
+        return toView(findRolOrThrow(id));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<RolView> list(Integer page, Integer size) {
-        Page<Rol> p = rolRepo.findAll(PageRequestUtil.of(page, size, Sort.by("nombreRol").ascending()));
-        return PageMapper.map(p, this::toView);
+        Page<Rol> roles = rolRepo.findAll(PageRequestUtil.of(page, size, Sort.by("nombreRol").ascending()));
+        return PageMapper.map(roles, this::toView);
     }
 
     @Transactional
     public boolean delete(Integer id) {
-        if (!rolRepo.existsById(id)) return false;
-        try {
-            rolRepo.deleteById(id);
-            return true;
-        } catch (DataIntegrityViolationException e) {
-            throw new ConflictException("No se puede eliminar: existen usuarios asociados a este rol");
-        }
+        return deleteIfPresent(
+                rolRepo,
+                id,
+                () -> new ConflictException("No se puede eliminar: existen usuarios asociados a este rol"));
     }
 
-    private RolView toView(Rol r) {
-        return new RolView(r.getIdRol(), r.getNombreRol());
+    private Rol findRolOrThrow(Integer id) {
+        return findOrThrow(rolRepo, id, () -> new NotFoundException("Rol no encontrado"));
+    }
+
+    private RolView toView(Rol rol) {
+        return new RolView(rol.getIdRol(), rol.getNombreRol());
     }
 }

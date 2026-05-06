@@ -11,11 +11,17 @@ import com.ep18.couriersync.backend.customers.dto.ProductoDTOs.ProductoView;
 import com.ep18.couriersync.backend.customers.dto.ProductoDTOs.UpdateProductoInput;
 import com.ep18.couriersync.backend.customers.repository.ProductoRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.deleteIfPresent;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.findOrThrow;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectDuplicatedChange;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.rejectWhen;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.setIfPresent;
+import static com.ep18.couriersync.backend.common.service.ServiceOperations.valueOrDefault;
 
 @Service
 @RequiredArgsConstructor
@@ -25,75 +31,71 @@ public class ProductoService {
 
     @Transactional
     public ProductoView create(CreateProductoInput in) {
-        // Regla de unicidad por nombre (si vas a usar nombre+marca, cambia aquí)
-        if (productoRepo.existsByNombreProductoIgnoreCase(in.nombreProducto())) {
-            throw new ConflictException("Ya existe un producto con ese nombre");
-        }
+        rejectWhen(
+                productoRepo.existsByNombreProductoIgnoreCase(in.nombreProducto()),
+                () -> new ConflictException("Ya existe un producto con ese nombre"));
 
-        Producto p = new Producto();
-        p.setNombreProducto(in.nombreProducto());
-        p.setPrecioUnitario(in.precioUnitario());
-        p.setIvaProducto(in.ivaProducto());
-        p.setMarca(in.marca());
+        Producto producto = new Producto();
+        producto.setNombreProducto(in.nombreProducto());
+        producto.setPrecioUnitario(in.precioUnitario());
+        producto.setIvaProducto(in.ivaProducto());
+        producto.setMarca(in.marca());
 
-        return toView(productoRepo.save(p));
+        return toView(productoRepo.save(producto));
     }
 
     @Transactional
     public ProductoView update(UpdateProductoInput in) {
-        Producto p = productoRepo.findById(in.idProducto())
-                .orElseThrow(() -> new NotFoundException("Producto no encontrado"));
+        Producto producto = findProductoOrThrow(in.idProducto());
 
-        // Si cambian el nombre, valida colisión
-        if (in.nombreProducto() != null
-                && !in.nombreProducto().equalsIgnoreCase(p.getNombreProducto())
-                && productoRepo.existsByNombreProductoIgnoreCase(in.nombreProducto())) {
-            throw new ConflictException("Ya existe un producto con ese nombre");
-        }
+        rejectDuplicatedChange(
+                in.nombreProducto(),
+                producto.getNombreProducto(),
+                String::equalsIgnoreCase,
+                productoRepo::existsByNombreProductoIgnoreCase,
+                () -> new ConflictException("Ya existe un producto con ese nombre"));
 
-        if (in.nombreProducto() != null)  p.setNombreProducto(in.nombreProducto());
-        if (in.precioUnitario() != null)  p.setPrecioUnitario(in.precioUnitario());
-        if (in.ivaProducto() != null)     p.setIvaProducto(in.ivaProducto());
-        if (in.marca() != null)           p.setMarca(in.marca());
+        setIfPresent(in.nombreProducto(), producto::setNombreProducto);
+        setIfPresent(in.precioUnitario(), producto::setPrecioUnitario);
+        setIfPresent(in.ivaProducto(), producto::setIvaProducto);
+        setIfPresent(in.marca(), producto::setMarca);
 
-        return toView(productoRepo.save(p));
+        return toView(productoRepo.save(producto));
     }
 
     @Transactional(readOnly = true)
     public ProductoView findById(Integer id) {
-        return productoRepo.findById(id)
-                .map(this::toView)
-                .orElseThrow(() -> new NotFoundException("Producto no encontrado"));
+        return toView(findProductoOrThrow(id));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<ProductoView> search(String q, Integer page, Integer size) {
-        Page<Producto> p = productoRepo.findByNombreProductoContainingIgnoreCase(
-                (q == null ? "" : q),
+        Page<Producto> productos = productoRepo.findByNombreProductoContainingIgnoreCase(
+                valueOrDefault(q, ""),
                 PageRequestUtil.of(page, size, Sort.by("nombreProducto").ascending())
         );
-        return PageMapper.map(p, this::toView);
+        return PageMapper.map(productos, this::toView);
     }
 
     @Transactional
     public boolean delete(Integer id) {
-        if (!productoRepo.existsById(id)) return false;
-        try {
-            productoRepo.deleteById(id);
-            return true;
-        } catch (DataIntegrityViolationException e) {
-            // Si hay FK desde DetalleDomicilio, levantará error: conviértelo en 409
-            throw new ConflictException("No se puede eliminar: el producto tiene movimientos asociados");
-        }
+        return deleteIfPresent(
+                productoRepo,
+                id,
+                () -> new ConflictException("No se puede eliminar: el producto tiene movimientos asociados"));
     }
 
-    private ProductoView toView(Producto p) {
+    private Producto findProductoOrThrow(Integer id) {
+        return findOrThrow(productoRepo, id, () -> new NotFoundException("Producto no encontrado"));
+    }
+
+    private ProductoView toView(Producto producto) {
         return new ProductoView(
-                p.getIdProducto(),
-                p.getNombreProducto(),
-                p.getPrecioUnitario(),
-                p.getIvaProducto(),
-                p.getMarca()
+                producto.getIdProducto(),
+                producto.getNombreProducto(),
+                producto.getPrecioUnitario(),
+                producto.getIvaProducto(),
+                producto.getMarca()
         );
     }
 }
