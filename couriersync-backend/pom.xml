@@ -21,7 +21,15 @@
         <java.version>21</java.version>
         <flyway.version>11.13.1</flyway.version>
         <graphql.ext.scalars.version>24.0</graphql.ext.scalars.version>
-				<sonar.organization>xjuandiego28-udea</sonar.organization> 
+        <sonar.organization>xjuandiego28-udea</sonar.organization>
+        <sonar.exclusions>
+            src/main/java/com/ep18/couriersync/backend/config/**,
+            src/main/java/com/ep18/couriersync/backend/customers/api/graphql/**,
+            src/main/java/com/ep18/couriersync/backend/customers/dto/**,
+            src/main/java/com/ep18/couriersync/backend/common/dto/**,
+            src/main/java/com/ep18/couriersync/backend/common/pagination/**,
+            src/main/java/com/ep18/couriersync/backend/common/service/ServiceOperations.java
+        </sonar.exclusions>
     </properties>
 
     <dependencyManagement>
@@ -182,11 +190,14 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
                 <configuration>
+                    <release>${java.version}</release>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

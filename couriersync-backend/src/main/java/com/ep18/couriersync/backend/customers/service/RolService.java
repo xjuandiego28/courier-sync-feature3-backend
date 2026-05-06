@@ -36,12 +36,13 @@ public class RolService {
 
         Rol rol = new Rol();
         rol.setNombreRol(in.nombreRol());
-        return toView(rolRepo.save(rol));
+        Rol saved = rolRepo.save(rol);
+        return new RolView(saved.getIdRol(), saved.getNombreRol());
     }
 
     @Transactional
     public RolView update(UpdateRolInput in) {
-        Rol rol = findRolOrThrow(in.idRol());
+        Rol rol = findOrThrow(rolRepo, in.idRol(), () -> new NotFoundException("Rol no encontrado"));
 
         rejectDuplicatedChange(
                 in.nombreRol(),
@@ -51,18 +52,20 @@ public class RolService {
                 () -> new ConflictException("Ya existe un rol con ese nombre"));
         setIfPresent(in.nombreRol(), rol::setNombreRol);
 
-        return toView(rolRepo.save(rol));
+        Rol saved = rolRepo.save(rol);
+        return new RolView(saved.getIdRol(), saved.getNombreRol());
     }
 
     @Transactional(readOnly = true)
     public RolView findById(Integer id) {
-        return toView(findRolOrThrow(id));
+        Rol rol = findOrThrow(rolRepo, id, () -> new NotFoundException("Rol no encontrado"));
+        return new RolView(rol.getIdRol(), rol.getNombreRol());
     }
 
     @Transactional(readOnly = true)
     public PageResponse<RolView> list(Integer page, Integer size) {
         Page<Rol> roles = rolRepo.findAll(PageRequestUtil.of(page, size, Sort.by("nombreRol").ascending()));
-        return PageMapper.map(roles, this::toView);
+        return PageMapper.map(roles, rol -> new RolView(rol.getIdRol(), rol.getNombreRol()));
     }
 
     @Transactional
@@ -73,11 +76,4 @@ public class RolService {
                 () -> new ConflictException("No se puede eliminar: existen usuarios asociados a este rol"));
     }
 
-    private Rol findRolOrThrow(Integer id) {
-        return findOrThrow(rolRepo, id, () -> new NotFoundException("Rol no encontrado"));
-    }
-
-    private RolView toView(Rol rol) {
-        return new RolView(rol.getIdRol(), rol.getNombreRol());
-    }
 }

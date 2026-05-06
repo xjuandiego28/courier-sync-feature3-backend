@@ -41,7 +41,10 @@ public class DepartamentoService {
 
     @Transactional
     public DepartamentoView update(UpdateDepartamentoInput in) {
-        Departamento departamento = findDepartamentoOrThrow(in.idDepartamento());
+        Departamento departamento = findOrThrow(
+                departamentoRepo,
+                in.idDepartamento(),
+                () -> new NotFoundException("Departamento no encontrado"));
 
         rejectDuplicatedChange(
                 in.nombreDepartamento(),
@@ -51,19 +54,28 @@ public class DepartamentoService {
                 () -> new ConflictException("Ya existe un departamento con ese nombre"));
         setIfPresent(in.nombreDepartamento(), departamento::setNombreDepartamento);
 
-        return toView(departamentoRepo.save(departamento));
+        Departamento saved = departamentoRepo.save(departamento);
+        return new DepartamentoView(saved.getIdDepartamento(), saved.getNombreDepartamento());
     }
 
     @Transactional(readOnly = true)
     public DepartamentoView findById(Integer id) {
-        return toView(findDepartamentoOrThrow(id));
+        Departamento departamento = findOrThrow(
+                departamentoRepo,
+                id,
+                () -> new NotFoundException("Departamento no encontrado"));
+        return new DepartamentoView(departamento.getIdDepartamento(), departamento.getNombreDepartamento());
     }
 
     @Transactional(readOnly = true)
     public PageResponse<DepartamentoView> list(Integer page, Integer size) {
         Page<Departamento> departamentos = departamentoRepo.findAll(
                 PageRequestUtil.of(page, size, Sort.by("nombreDepartamento").ascending()));
-        return PageMapper.map(departamentos, this::toView);
+        return PageMapper.map(
+                departamentos,
+                departamento -> new DepartamentoView(
+                        departamento.getIdDepartamento(),
+                        departamento.getNombreDepartamento()));
     }
 
     @Transactional
@@ -74,11 +86,4 @@ public class DepartamentoService {
                 () -> new ConflictException("No se puede eliminar: existen registros relacionados"));
     }
 
-    private Departamento findDepartamentoOrThrow(Integer id) {
-        return findOrThrow(departamentoRepo, id, () -> new NotFoundException("Departamento no encontrado"));
-    }
-
-    private DepartamentoView toView(Departamento departamento) {
-        return new DepartamentoView(departamento.getIdDepartamento(), departamento.getNombreDepartamento());
-    }
 }

@@ -41,12 +41,19 @@ public class ProductoService {
         producto.setIvaProducto(in.ivaProducto());
         producto.setMarca(in.marca());
 
-        return toView(productoRepo.save(producto));
+        Producto saved = productoRepo.save(producto);
+        return new ProductoView(
+                saved.getIdProducto(),
+                saved.getNombreProducto(),
+                saved.getPrecioUnitario(),
+                saved.getIvaProducto(),
+                saved.getMarca()
+        );
     }
 
     @Transactional
     public ProductoView update(UpdateProductoInput in) {
-        Producto producto = findProductoOrThrow(in.idProducto());
+        Producto producto = findOrThrow(productoRepo, in.idProducto(), () -> new NotFoundException("Producto no encontrado"));
 
         rejectDuplicatedChange(
                 in.nombreProducto(),
@@ -60,12 +67,26 @@ public class ProductoService {
         setIfPresent(in.ivaProducto(), producto::setIvaProducto);
         setIfPresent(in.marca(), producto::setMarca);
 
-        return toView(productoRepo.save(producto));
+        Producto saved = productoRepo.save(producto);
+        return new ProductoView(
+                saved.getIdProducto(),
+                saved.getNombreProducto(),
+                saved.getPrecioUnitario(),
+                saved.getIvaProducto(),
+                saved.getMarca()
+        );
     }
 
     @Transactional(readOnly = true)
     public ProductoView findById(Integer id) {
-        return toView(findProductoOrThrow(id));
+        Producto producto = findOrThrow(productoRepo, id, () -> new NotFoundException("Producto no encontrado"));
+        return new ProductoView(
+                producto.getIdProducto(),
+                producto.getNombreProducto(),
+                producto.getPrecioUnitario(),
+                producto.getIvaProducto(),
+                producto.getMarca()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -74,7 +95,13 @@ public class ProductoService {
                 valueOrDefault(q, ""),
                 PageRequestUtil.of(page, size, Sort.by("nombreProducto").ascending())
         );
-        return PageMapper.map(productos, this::toView);
+        return PageMapper.map(productos, producto -> new ProductoView(
+                producto.getIdProducto(),
+                producto.getNombreProducto(),
+                producto.getPrecioUnitario(),
+                producto.getIvaProducto(),
+                producto.getMarca()
+        ));
     }
 
     @Transactional
@@ -85,17 +112,4 @@ public class ProductoService {
                 () -> new ConflictException("No se puede eliminar: el producto tiene movimientos asociados"));
     }
 
-    private Producto findProductoOrThrow(Integer id) {
-        return findOrThrow(productoRepo, id, () -> new NotFoundException("Producto no encontrado"));
-    }
-
-    private ProductoView toView(Producto producto) {
-        return new ProductoView(
-                producto.getIdProducto(),
-                producto.getNombreProducto(),
-                producto.getPrecioUnitario(),
-                producto.getIvaProducto(),
-                producto.getMarca()
-        );
-    }
 }

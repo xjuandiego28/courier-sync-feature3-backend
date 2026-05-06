@@ -36,7 +36,10 @@ public class CiudadService {
 
     @Transactional
     public CiudadView create(CreateCiudadInput in) {
-        Departamento departamento = findDepartamentoOrThrow(in.idDepartamento());
+        Departamento departamento = findOrThrow(
+                departamentoRepo,
+                in.idDepartamento(),
+                () -> new NotFoundException("Departamento no encontrado"));
         rejectDuplicateName(
                 in.nombreCiudad(),
                 in.idDepartamento(),
@@ -46,41 +49,84 @@ public class CiudadService {
         ciudad.setNombreCiudad(in.nombreCiudad());
         ciudad.setDepartamento(departamento);
 
-        return toView(ciudadRepo.save(ciudad));
+        Ciudad saved = ciudadRepo.save(ciudad);
+        return new CiudadView(
+                saved.getIdCiudad(),
+                saved.getNombreCiudad(),
+                saved.getDepartamento().getIdDepartamento(),
+                saved.getDepartamento().getNombreDepartamento()
+        );
     }
 
     @Transactional
     public CiudadView update(UpdateCiudadInput in) {
-        Ciudad ciudad = findCiudadOrThrow(in.idCiudad());
+        Ciudad ciudad = findOrThrow(ciudadRepo, in.idCiudad(), () -> new NotFoundException("Ciudad no encontrada"));
 
         Optional.ofNullable(in.nombreCiudad())
                 .filter(nombre -> !nombre.equalsIgnoreCase(ciudad.getNombreCiudad()))
-                .ifPresent(nombre -> renameCiudad(ciudad, nombre));
+                .ifPresent(nombre -> {
+                    rejectDuplicateName(
+                            nombre,
+                            ciudad.getDepartamento().getIdDepartamento(),
+                            "Ya existe ciudad con ese nombre en el departamento");
+                    ciudad.setNombreCiudad(nombre);
+                });
         Optional.ofNullable(in.idDepartamento())
                 .filter(idDepartamento -> !idDepartamento.equals(ciudad.getDepartamento().getIdDepartamento()))
-                .map(this::findDepartamentoOrThrow)
-                .ifPresent(departamento -> moveCiudad(ciudad, departamento));
+                .map(idDepartamento -> findOrThrow(
+                        departamentoRepo,
+                        idDepartamento,
+                        () -> new NotFoundException("Departamento no encontrado")))
+                .ifPresent(departamento -> {
+                    rejectDuplicateName(
+                            ciudad.getNombreCiudad(),
+                            departamento.getIdDepartamento(),
+                            "Ya existe ciudad con ese nombre en el nuevo departamento");
+                    ciudad.setDepartamento(departamento);
+                });
 
-        return toView(ciudadRepo.save(ciudad));
+        Ciudad saved = ciudadRepo.save(ciudad);
+        return new CiudadView(
+                saved.getIdCiudad(),
+                saved.getNombreCiudad(),
+                saved.getDepartamento().getIdDepartamento(),
+                saved.getDepartamento().getNombreDepartamento()
+        );
     }
 
     @Transactional(readOnly = true)
     public CiudadView findById(Integer id) {
-        return toView(findCiudadOrThrow(id));
+        Ciudad ciudad = findOrThrow(ciudadRepo, id, () -> new NotFoundException("Ciudad no encontrada"));
+        return new CiudadView(
+                ciudad.getIdCiudad(),
+                ciudad.getNombreCiudad(),
+                ciudad.getDepartamento().getIdDepartamento(),
+                ciudad.getDepartamento().getNombreDepartamento()
+        );
     }
 
     @Transactional(readOnly = true)
     public PageResponse<CiudadView> listByDepartamento(Integer idDepartamento, Integer page, Integer size) {
         Page<Ciudad> ciudades = ciudadRepo.findAllByDepartamento_IdDepartamento(
                 idDepartamento, PageRequestUtil.of(page, size, Sort.by(SORT_BY_NOMBRE).ascending()));
-        return PageMapper.map(ciudades, this::toView);
+        return PageMapper.map(ciudades, ciudad -> new CiudadView(
+                ciudad.getIdCiudad(),
+                ciudad.getNombreCiudad(),
+                ciudad.getDepartamento().getIdDepartamento(),
+                ciudad.getDepartamento().getNombreDepartamento()
+        ));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<CiudadView> search(String q, Integer page, Integer size) {
         Page<Ciudad> ciudades = ciudadRepo.findByNombreCiudadContainingIgnoreCase(
                 valueOrDefault(q, ""), PageRequestUtil.of(page, size, Sort.by(SORT_BY_NOMBRE).ascending()));
-        return PageMapper.map(ciudades, this::toView);
+        return PageMapper.map(ciudades, ciudad -> new CiudadView(
+                ciudad.getIdCiudad(),
+                ciudad.getNombreCiudad(),
+                ciudad.getDepartamento().getIdDepartamento(),
+                ciudad.getDepartamento().getNombreDepartamento()
+        ));
     }
 
     @Transactional
@@ -91,42 +137,9 @@ public class CiudadService {
                 () -> new ConflictException("No se puede eliminar: existen registros relacionados"));
     }
 
-    private void renameCiudad(Ciudad ciudad, String nombreCiudad) {
-        rejectDuplicateName(
-                nombreCiudad,
-                ciudad.getDepartamento().getIdDepartamento(),
-                "Ya existe ciudad con ese nombre en el departamento");
-        ciudad.setNombreCiudad(nombreCiudad);
-    }
-
-    private void moveCiudad(Ciudad ciudad, Departamento departamento) {
-        rejectDuplicateName(
-                ciudad.getNombreCiudad(),
-                departamento.getIdDepartamento(),
-                "Ya existe ciudad con ese nombre en el nuevo departamento");
-        ciudad.setDepartamento(departamento);
-    }
-
     private void rejectDuplicateName(String nombreCiudad, Integer idDepartamento, String message) {
         rejectWhen(
                 ciudadRepo.existsByNombreCiudadIgnoreCaseAndDepartamento_IdDepartamento(nombreCiudad, idDepartamento),
                 () -> new ConflictException(message));
-    }
-
-    private Ciudad findCiudadOrThrow(Integer id) {
-        return findOrThrow(ciudadRepo, id, () -> new NotFoundException("Ciudad no encontrada"));
-    }
-
-    private Departamento findDepartamentoOrThrow(Integer id) {
-        return findOrThrow(departamentoRepo, id, () -> new NotFoundException("Departamento no encontrado"));
-    }
-
-    private CiudadView toView(Ciudad ciudad) {
-        return new CiudadView(
-                ciudad.getIdCiudad(),
-                ciudad.getNombreCiudad(),
-                ciudad.getDepartamento().getIdDepartamento(),
-                ciudad.getDepartamento().getNombreDepartamento()
-        );
     }
 }

@@ -27,10 +27,6 @@ public final class ServiceOperations {
         return Objects.requireNonNullElse(value, 0.0);
     }
 
-    public static int nvl(Integer value) {
-        return Objects.requireNonNullElse(value, 0);
-    }
-
     public static <T, ID> T findOrThrow(
             JpaRepository<T, ID> repository,
             ID id,
@@ -64,16 +60,10 @@ public final class ServiceOperations {
             JpaRepository<T, ID> repository,
             ID id,
             Supplier<? extends RuntimeException> conflictSupplier) {
-        return Optional.of(repository.existsById(id))
-                .filter(Boolean::booleanValue)
-                .map(ignored -> deleteExisting(repository, id, conflictSupplier))
-                .orElse(false);
-    }
+        if (!repository.existsById(id)) {
+            return false;
+        }
 
-    private static <T, ID> boolean deleteExisting(
-            JpaRepository<T, ID> repository,
-            ID id,
-            Supplier<? extends RuntimeException> conflictSupplier) {
         try {
             repository.deleteById(id);
             return true;
