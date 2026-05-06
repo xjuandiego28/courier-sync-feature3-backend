@@ -105,6 +105,34 @@ class CiudadServiceTest {
     }
 
     @Test
+    void updateKeepsCityWhenNameAndDepartmentDoNotChange() {
+        Ciudad ciudad = ciudad(3, "Bello", departamento(5, "Antioquia"));
+        when(ciudadRepo.findById(3)).thenReturn(Optional.of(ciudad));
+        when(ciudadRepo.save(ciudad)).thenReturn(ciudad);
+
+        var view = service.update(new UpdateCiudadInput(3, "BELLO", 5));
+
+        assertThat(view.idCiudad()).isEqualTo(3);
+        assertThat(view.nombreCiudad()).isEqualTo("Bello");
+        assertThat(view.idDepartamento()).isEqualTo(5);
+    }
+
+    @Test
+    void updateRejectsMissingCityOrDepartment() {
+        when(ciudadRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(new UpdateCiudadInput(404, "Bello", null)))
+                .isInstanceOf(NotFoundException.class);
+
+        Ciudad ciudad = ciudad(3, "Bello", departamento(5, "Antioquia"));
+        when(ciudadRepo.findById(3)).thenReturn(Optional.of(ciudad));
+        when(departamentoRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(new UpdateCiudadInput(3, null, 404)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
     void searchUsesEmptyQueryAndDeleteWrapsIntegrityViolations() {
         when(ciudadRepo.findByNombreCiudadContainingIgnoreCase(anyString(), any()))
                 .thenReturn(new PageImpl<>(List.of(ciudad(3, "Bello", departamento(5, "Antioquia")))));
@@ -114,6 +142,23 @@ class CiudadServiceTest {
         when(ciudadRepo.existsById(3)).thenReturn(true);
         org.mockito.Mockito.doThrow(new DataIntegrityViolationException("fk")).when(ciudadRepo).deleteById(3);
         assertThatThrownBy(() -> service.delete(3)).isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    void findListAndDeleteHandleRepositoryResults() {
+        Ciudad ciudad = ciudad(3, "Bello", departamento(5, "Antioquia"));
+        when(ciudadRepo.findById(3)).thenReturn(Optional.of(ciudad));
+        when(ciudadRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThat(service.findById(3).nombreCiudad()).isEqualTo("Bello");
+        assertThatThrownBy(() -> service.findById(404)).isInstanceOf(NotFoundException.class);
+
+        when(ciudadRepo.findAllByDepartamento_IdDepartamento(eq(5), any()))
+                .thenReturn(new PageImpl<>(List.of(ciudad)));
+        assertThat(service.listByDepartamento(5, 0, 10).content()).hasSize(1);
+
+        when(ciudadRepo.existsById(99)).thenReturn(false);
+        assertThat(service.delete(99)).isFalse();
     }
 
     private static Ciudad ciudad(Integer id, String nombre, Departamento departamento) {

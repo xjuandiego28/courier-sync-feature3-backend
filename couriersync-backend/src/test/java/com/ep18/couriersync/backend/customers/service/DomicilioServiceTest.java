@@ -112,6 +112,21 @@ class DomicilioServiceTest {
     }
 
     @Test
+    void updateDeletesRequestedDetails() {
+        Domicilio existing = domicilio(7, "CREADO");
+        existing.addDetalle(detalle(20, producto(10, "Pan"), 1, 3_000.0));
+        when(domicilioRepo.findById(7)).thenReturn(Optional.of(existing));
+        when(domicilioRepo.save(existing)).thenReturn(existing);
+
+        var view = service.update(new UpdateDomicilioInput(
+                7, null, null, null, null, null, null, null, null, null, null, List.of(20)));
+
+        assertThat(view.detalles()).isEmpty();
+        assertThat(view.valorPedido()).isZero();
+        verify(detalleRepo).deleteAllByDomicilio_IdDomicilioAndIdDetalleIn(7, List.of(20));
+    }
+
+    @Test
     void updateRejectsClosedOrdersAndUnknownDetails() {
         when(domicilioRepo.findById(8)).thenReturn(Optional.of(domicilio(8, "entregado")));
 
@@ -148,8 +163,39 @@ class DomicilioServiceTest {
         when(domicilioRepo.findAllByEstadoIgnoreCase(any(), any())).thenReturn(new PageImpl<>(List.of(domicilio)));
         assertThat(service.listByEstado("creado", 0, 5).content()).hasSize(1);
 
+        when(domicilioRepo.findAllByUsuario_IdUsuario(any(), any())).thenReturn(new PageImpl<>(List.of(domicilio)));
+        assertThat(service.listByUsuario(1, 0, 5).content()).hasSize(1);
+
+        when(domicilioRepo.findAllByFechaPedidoBetween(any(), any(), any())).thenReturn(new PageImpl<>(List.of(domicilio)));
+        assertThat(service.listByFecha(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 2), 0, 5).content())
+                .hasSize(1);
+
         assertThat(service.delete(7)).isTrue();
         verify(domicilioRepo).delete(domicilio);
+    }
+
+    @Test
+    void createRejectsMissingUserOrProduct() {
+        when(usuarioRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(new CreateDomicilioInput(
+                404, "100", null, LocalDate.of(2026, 5, 2), null, null, null, null, List.of())))
+                .isInstanceOf(NotFoundException.class);
+
+        when(usuarioRepo.findById(1)).thenReturn(Optional.of(usuario(1, "Ana")));
+        when(productoRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(new CreateDomicilioInput(
+                1,
+                "100",
+                null,
+                LocalDate.of(2026, 5, 2),
+                null,
+                null,
+                null,
+                null,
+                List.of(new DetalleLineaInput(404, 1, 3_000.0)))))
+                .isInstanceOf(NotFoundException.class);
     }
 
     @Test

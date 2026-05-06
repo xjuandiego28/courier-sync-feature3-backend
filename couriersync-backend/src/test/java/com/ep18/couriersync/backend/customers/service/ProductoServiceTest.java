@@ -103,6 +103,15 @@ class ProductoServiceTest {
     }
 
     @Test
+    void findByIdReturnsProductViewAndFailsWhenMissing() {
+        when(productoRepo.findById(1)).thenReturn(Optional.of(producto(1, "Cafe", 10.0, 0.19, "A")));
+        when(productoRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThat(service.findById(1).nombreProducto()).isEqualTo("Cafe");
+        assertThatThrownBy(() -> service.findById(404)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
     void deleteReturnsFalseWhenMissingAndWrapsIntegrityViolations() {
         when(productoRepo.existsById(1)).thenReturn(false);
         assertThat(service.delete(1)).isFalse();

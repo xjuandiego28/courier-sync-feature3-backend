@@ -96,6 +96,34 @@ class UsuarioServiceTest {
     }
 
     @Test
+    void createRejectsMissingReferences() {
+        when(usuarioRepo.existsByCorreoIgnoreCase("ana@mail.com")).thenReturn(false);
+        when(ciudadRepo.findById(2)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
+                "Ana", "ana@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+                .isInstanceOf(NotFoundException.class);
+
+        when(usuarioRepo.existsByCorreoIgnoreCase("bea@mail.com")).thenReturn(false);
+        when(ciudadRepo.findById(2)).thenReturn(Optional.of(ciudad(2, "Medellin", departamento(1, "Antioquia"))));
+        when(departamentoRepo.findById(1)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
+                "Bea", "bea@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+                .isInstanceOf(NotFoundException.class);
+
+        Departamento departamento = departamento(1, "Antioquia");
+        when(usuarioRepo.existsByCorreoIgnoreCase("caro@mail.com")).thenReturn(false);
+        when(ciudadRepo.findById(2)).thenReturn(Optional.of(ciudad(2, "Medellin", departamento)));
+        when(departamentoRepo.findById(1)).thenReturn(Optional.of(departamento));
+        when(rolRepo.findById(3)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(new CreateUsuarioInput(
+                "Caro", "caro@mail.com", "3001234567", null, "Calle 1", 2, 1, 3)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
     void updateAppliesProvidedFieldsAndReferenceChanges() {
         Departamento antioquia = departamento(1, "Antioquia");
         Departamento caldas = departamento(4, "Caldas");
@@ -133,6 +161,56 @@ class UsuarioServiceTest {
     }
 
     @Test
+    void updateRejectsDuplicatedEmailAndMissingRole() {
+        Departamento departamento = departamento(1, "Antioquia");
+        Usuario usuario = usuario(9, "Ana", "ana@mail.com", ciudad(2, "Medellin", departamento), departamento, rol(3, "CLIENTE"));
+        when(usuarioRepo.findById(9)).thenReturn(Optional.of(usuario));
+        when(usuarioRepo.existsByCorreoIgnoreCase("otra@mail.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(new UpdateUsuarioInput(
+                9, null, "otra@mail.com", null, null, null, null, null, null)))
+                .isInstanceOf(ConflictException.class);
+
+        when(rolRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(new UpdateUsuarioInput(
+                9, null, null, null, null, null, null, null, 404)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void updateCanChangeOnlyCityOrOnlyDepartment() {
+        Departamento antioquia = departamento(1, "Antioquia");
+        Departamento valle = departamento(4, "Valle");
+        Ciudad medellin = ciudad(2, "Medellin", antioquia);
+        Usuario usuario = usuario(9, "Ana", "ana@mail.com", medellin, antioquia, rol(3, "CLIENTE"));
+        when(usuarioRepo.findById(9)).thenReturn(Optional.of(usuario));
+        when(ciudadRepo.findById(5)).thenReturn(Optional.of(ciudad(5, "Envigado", antioquia)));
+        when(usuarioRepo.save(usuario)).thenReturn(usuario);
+
+        var cityView = service.update(new UpdateUsuarioInput(9, null, null, null, null, null, 5, null, null));
+
+        assertThat(cityView.idCiudad()).isEqualTo(5);
+        assertThat(cityView.idDepartamento()).isEqualTo(1);
+
+        when(departamentoRepo.findById(4)).thenReturn(Optional.of(valle));
+
+        assertThatThrownBy(() -> service.update(new UpdateUsuarioInput(9, null, null, null, null, null, null, 4, null)))
+                .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    void findByIdReturnsUserViewAndFailsWhenMissing() {
+        Departamento departamento = departamento(1, "Antioquia");
+        Usuario usuario = usuario(9, "Ana", "ana@mail.com", ciudad(2, "Medellin", departamento), departamento, rol(3, "CLIENTE"));
+        when(usuarioRepo.findById(9)).thenReturn(Optional.of(usuario));
+        when(usuarioRepo.findById(404)).thenReturn(Optional.empty());
+
+        assertThat(service.findById(9).correo()).isEqualTo("ana@mail.com");
+        assertThatThrownBy(() -> service.findById(404)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
     void searchAndDeleteHandleRepositoryResults() {
         Departamento departamento = departamento(1, "Antioquia");
         Usuario usuario = usuario(9, "Ana", "ana@mail.com", ciudad(2, "Medellin", departamento), departamento, rol(3, "CLIENTE"));
@@ -149,6 +227,19 @@ class UsuarioServiceTest {
         when(usuarioRepo.existsById(10)).thenReturn(true);
         org.mockito.Mockito.doThrow(new DataIntegrityViolationException("fk")).when(usuarioRepo).deleteById(10);
         assertThatThrownBy(() -> service.delete(10)).isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    void listByFiltersMapRepositoryPages() {
+        Departamento departamento = departamento(1, "Antioquia");
+        Usuario usuario = usuario(9, "Ana", "ana@mail.com", ciudad(2, "Medellin", departamento), departamento, rol(3, "CLIENTE"));
+        when(usuarioRepo.findAllByCiudad_IdCiudad(eq(2), any())).thenReturn(new PageImpl<>(List.of(usuario)));
+        when(usuarioRepo.findAllByDepartamento_IdDepartamento(eq(1), any())).thenReturn(new PageImpl<>(List.of(usuario)));
+        when(usuarioRepo.findAllByRol_IdRol(eq(3), any())).thenReturn(new PageImpl<>(List.of(usuario)));
+
+        assertThat(service.listByCiudad(2, 0, 10).content()).hasSize(1);
+        assertThat(service.listByDepartamento(1, 0, 10).content()).hasSize(1);
+        assertThat(service.listByRol(3, 0, 10).content()).hasSize(1);
     }
 
     private static Usuario usuario(Integer id, String nombre, String correo, Ciudad ciudad, Departamento departamento, Rol rol) {
